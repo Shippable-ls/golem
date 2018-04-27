@@ -34,6 +34,7 @@ SEND_PEERS_NUM = 10
 USE_IP6 = 0
 USE_UPNP = 1
 ACCEPT_TASKS = 1
+IN_SHUTDOWN = 0
 SEND_PINGS = 1
 ENABLE_TALKBACK = 0
 
@@ -123,6 +124,7 @@ class AppConfig:
             key_difficulty=KEY_DIFFICULTY,
             # flags
             accept_tasks=ACCEPT_TASKS,
+            in_shutdown=IN_SHUTDOWN,
             send_pings=SEND_PINGS,
             enable_talkback=ENABLE_TALKBACK,
             # hardware
