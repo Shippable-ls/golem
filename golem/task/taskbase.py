@@ -1,12 +1,13 @@
 import abc
 import logging
 import time
-from typing import List, Type
+from typing import List, Type, Optional, Tuple, TypeVar, Any
 
 from apps.core.task.coretaskstate import TaskDefinition, TaskDefaults, Options
 import golem
 from golem.core.simpleserializer import CBORSerializer, DictSerializer
 from golem.network.p2p.node import Node
+from golem.task.masking import Mask
 from golem.task.taskstate import TaskState
 
 logger = logging.getLogger("golem.task")
@@ -38,7 +39,7 @@ class ResultType(object): # class ResultType(Enum):
     FILES = 1
 
 
-class TaskHeader(object):
+class TaskFixedHeader(object):
     """ Task header describe general information about task as an request and is propagated in the
         network as an offer for computing nodes
     """
@@ -91,7 +92,11 @@ class TaskHeader(object):
         return th
 
     @classmethod
-    def dict_to_binary(cls, dictionary):
+    def dict_to_binary(cls, dictionary: dict) -> bytes:
+        return CBORSerializer.dumps(cls.dict_to_binarizable(dictionary))
+
+    @classmethod
+    def dict_to_binarizable(cls, dictionary: dict) -> List[tuple]:
         """ Nullifies the properties not required for signature verification
         and sorts the task dict representation in order to have the same
         resulting binary blob after serialization.
@@ -113,10 +118,62 @@ class TaskHeader(object):
             self_dict['docker_images'] = [cls._ordered(di) for di
                                           in self_dict['docker_images']]
 
-        return CBORSerializer.dumps(cls._ordered(self_dict))
+        return cls._ordered(self_dict)
 
     @staticmethod
-    def _ordered(dictionary):
+    def _ordered(dictionary: dict) -> List[tuple]:
+        return sorted(dictionary.items())
+
+
+TI = TypeVar('TI', bound='TaskHeader')
+
+
+class TaskHeader(object):
+
+    def __init__(
+            self,
+            mask: Optional[Mask] = None,
+            timestamp: Optional[float] = None,
+            signature: Optional[bytes] = None,
+            **kwargs) -> None:
+
+        self.fixed_header = TaskFixedHeader(**kwargs)
+        self.mask = mask
+        self.timestamp = timestamp
+        self.signature = signature
+
+    def to_binary(self) -> bytes:
+        return self.dict_to_binary(self.to_dict())
+
+    def to_dict(self) -> dict:
+        return DictSerializer.dump(self, typed=False)
+
+    def __getattr__(self, item: str) -> Any:
+        return getattr(self.fixed_header, item)
+
+    @staticmethod
+    def from_dict(dictionary: dict) -> TI:
+        th: TaskHeader = DictSerializer.load(dictionary, as_class=TaskHeader)
+        if isinstance(th.fixed_header, dict):
+            th.fixed_header = TaskFixedHeader.from_dict(th.fixed_header)
+        return th
+
+    @classmethod
+    def dict_to_binary(cls, dictionary: dict) -> bytes:
+        return CBORSerializer.dumps(cls.dict_to_binarizable(dictionary))
+
+    @classmethod
+    def dict_to_binarizable(cls, dictionary: dict) -> List[tuple]:
+        self_dict = dict(dictionary)
+        self_dict.pop('signature', None)
+
+        self_dict['fixed_header'] = TaskFixedHeader.dict_to_binarizable(
+            self_dict['fixed_header'])
+
+        return cls._ordered(self_dict)
+
+    @staticmethod
+    def _ordered(dictionary: dict) -> List[Tuple]:
         return sorted(dictionary.items())
 
 
